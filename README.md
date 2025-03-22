@@ -74,6 +74,10 @@ The system will display the answer below the query form.
 - [FAISS](https://github.com/facebookresearch/faiss) for similarity search.  
 - [Transformers](https://huggingface.co/transformers/) for question-answering.  
 
+## Example 
+
+![image](https://github.com/user-attachments/assets/671220d2-bdb6-4b1a-9c88-de41d10cec7d)
+
 ---
 
 Explore hotel booking insights effortlessly! 
