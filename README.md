@@ -76,7 +76,10 @@ The system will display the answer below the query form.
 
 ## Example 
 
-![image](https://github.com/user-attachments/assets/671220d2-bdb6-4b1a-9c88-de41d10cec7d)
+![image](https://github.com/user-attachments/assets/2a72717a-a3e3-4d4e-902d-9af218a129e0)
+![image](https://github.com/user-attachments/assets/058cd61e-fbc8-48e5-83ff-aa85a415526d)
+
+
 
 ---
 
