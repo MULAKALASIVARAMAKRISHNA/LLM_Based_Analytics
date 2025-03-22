@@ -10,6 +10,7 @@ from pyngrok import ngrok, conf
 import nest_asyncio
 import uvicorn
 import asyncio
+import signal
 
 # Load and preprocess dataset
 file_path = '/content/hotel_bookings.csv'
@@ -86,34 +87,38 @@ def get_analytics():
 
 # Enhanced Question-Answering Function with Semantic Understanding
 def ask_question(query):
-    # Precomputed analytical insights
-    analytics = get_analytics()
+    try:
+        # Precomputed analytical insights
+        analytics = get_analytics()
 
-    # Check if the query is for an analytical insight
-    if 'highest_cancel_hotel' in query.lower():
-        return f"The hotel with the highest cancellation rate is '{analytics['highest_cancel_hotel']['hotel']}' with a rate of {analytics['highest_cancel_hotel']['is_canceled'] * 100:.2f}%."
-    elif 'customer_types' in query.lower():
-        return f"Customer types distribution: {analytics['customer_types']}"
-    elif 'lead_time_distribution' in query.lower():
-        return f"Lead time distribution: Min={analytics['lead_time_distribution']['min']}, Max={analytics['lead_time_distribution']['max']}, Mean={analytics['lead_time_distribution']['mean']:.2f}"
-    elif 'highest_price' in query.lower():
-        return f"The highest booking price is {analytics['highest_price']:.2f}."
-    elif 'average price' in query.lower():
-        avg_price = df['adr'].mean()
-        return f"The average price of a hotel booking is {avg_price:.2f}."
-    elif 'total revenue' in query.lower() and 'july 2017' in query.lower():
-        revenue_july_2017 = df[(df['arrival_date_year'] == 2017) & (df['arrival_date_month'] == 'July')]['adr_total'].sum()
-        return f"The total revenue for July 2017 is {revenue_july_2017:.2f}."
-    elif 'locations with highest cancellations' in query.lower():
-        cancellations_by_country = df[df['is_canceled'] == 1]['country'].value_counts().idxmax()
-        return f"The location with the highest booking cancellations is {cancellations_by_country}."
+        # Check if the query is for an analytical insight
+        if 'highest_cancel_hotel' in query.lower():
+            return f"The hotel with the highest cancellation rate is '{analytics['highest_cancel_hotel']['hotel']}' with a rate of {analytics['highest_cancel_hotel']['is_canceled'] * 100:.2f}%."
+        elif 'customer_types' in query.lower():
+            return f"Customer types distribution: {analytics['customer_types']}"
+        elif 'lead_time_distribution' in query.lower():
+            return f"Lead time distribution: Min={analytics['lead_time_distribution']['min']}, Max={analytics['lead_time_distribution']['max']}, Mean={analytics['lead_time_distribution']['mean']:.2f}"
+        elif 'highest_price' in query.lower():
+            return f"The highest booking price is {analytics['highest_price']:.2f}."
+        elif 'average price' in query.lower():
+            avg_price = df['adr'].mean()
+            return f"The average price of a hotel booking is {avg_price:.2f}."
+        elif 'total revenue' in query.lower() and 'july 2017' in query.lower():
+            revenue_july_2017 = df[(df['arrival_date_year'] == 2017) & (df['arrival_date_month'] == 'July')]['adr_total'].sum()
+            return f"The total revenue for July 2017 is {revenue_july_2017:.2f}."
+        elif 'locations with highest cancellations' in query.lower():
+            cancellations_by_country = df[df['is_canceled'] == 1]['country'].value_counts().idxmax()
+            return f"The location with the highest booking cancellations is {cancellations_by_country}."
 
-    # Fallback to vector search and LLM for general queries
-    query_vector = model.encode([query])
-    _, indices = index.search(query_vector, k=5)
-    context = " ".join([df.iloc[idx]['booking_info'] for idx in indices[0]])
-    result = qa_pipeline(question=query, context=context)
-    return result['answer']
+        # Fallback to vector search and LLM for general queries
+        query_vector = model.encode([query])
+        _, indices = index.search(query_vector, k=5)
+        context = " ".join([df.iloc[idx]['booking_info'] for idx in indices[0]])
+        result = qa_pipeline(question=query, context=context)
+        return result['answer']
+    except Exception as e:
+        print(f"Error in ask_question: {e}")  # Debugging line
+        return f"Error processing your query: {str(e)}"
 
 # Define FastAPI app
 app = FastAPI()
@@ -128,7 +133,7 @@ def read_root():
         </head>
         <body>
             <h1>Welcome to the Hotel Booking Analytics and RAG System!</h1>
-            <form action="/" method="post">
+            <form action="/" method="post" enctype="application/x-www-form-urlencoded">
                 <label for="query">Enter your question:</label><br>
                 <input type="text" id="query" name="query" placeholder="e.g., What is the cancellation rate?"><br><br>
                 <input type="submit" value="Submit">
@@ -138,25 +143,34 @@ def read_root():
     """
 
 @app.post("/", response_class=HTMLResponse)
-def handle_query(query: str = Form(...)):
-    answer = ask_question(query)
-    return f"""
-    <html>
-        <head>
-            <title>Hotel Booking Analytics and RAG System</title>
-        </head>
-        <body>
-            <h1>Welcome to the Hotel Booking Analytics and RAG System!</h1>
-            <form action="/" method="post">
-                <label for="query">Enter your question:</label><br>
-                <input type="text" id="query" name="query" placeholder="e.g., What is the cancellation rate?"><br><br>
-                <input type="submit" value="Submit">
-            </form>
-            <h2>Answer:</h2>
-            <p>{answer}</p>
-        </body>
-    </html>
-    """
+async def handle_query(request: Request):
+    try:
+        form_data = await request.form()
+        query = form_data.get("query")
+        print(f"Received query: {query}")  # Debugging line
+        if not query:
+            return HTMLResponse(content="<h1>Error: No query provided</h1>", status_code=400)
+        answer = ask_question(query)
+        return f"""
+        <html>
+            <head>
+                <title>Hotel Booking Analytics and RAG System</title>
+            </head>
+            <body>
+                <h1>Welcome to the Hotel Booking Analytics and RAG System!</h1>
+                <form action="/" method="post" enctype="application/x-www-form-urlencoded">
+                    <label for="query">Enter your question:</label><br>
+                    <input type="text" id="query" name="query" placeholder="Ask anything?"><br><br>
+                    <input type="submit" value="Submit">
+                </form>
+                <h2>Answer:</h2>
+                <p>{answer}</p>
+            </body>
+        </html>
+        """
+    except Exception as e:
+        print(f"Error processing request: {e}")  # Debugging line
+        return HTMLResponse(content=f"<h1>Internal Server Error: {str(e)}</h1>", status_code=500)
 
 # Set ngrok authentication token (replace with your token)
 NGROK_AUTH_TOKEN = ""  # Replace with your ngrok token
@@ -164,7 +178,7 @@ conf.get_default().auth_token = NGROK_AUTH_TOKEN
 
 # Run the API using ngrok
 try:
-    ngrok_tunnel = ngrok.connect(8000)
+    ngrok_tunnel = ngrok.connect(8001)  # Connect to port 8001
     print("Public URL:", ngrok_tunnel.public_url)
 except Exception as e:
     print("Failed to start ngrok tunnel:", e)
@@ -175,8 +189,18 @@ nest_asyncio.apply()
 
 # Run the FastAPI server with graceful shutdown
 async def run_server():
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000)
+    config = uvicorn.Config(app, host="0.0.0.0", port=8001)  # Use port 8001
     server = uvicorn.Server(config)
+
+    # Handle graceful shutdown on KeyboardInterrupt
+    def shutdown_handler():
+        print("Shutting down server...")
+        server.should_exit = True
+
+    loop = asyncio.get_event_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, shutdown_handler)
+
     await server.serve()
 
 try:
